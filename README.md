@@ -89,7 +89,8 @@
 
 3. **（可选）关闭不需要的功能**  
    - 无需微信通知：`config.json` 中设 `ENABLE_WXPUSHER: false`  
-   - 无需 GitHub 推送：`config.json` 中设 `GITHUB_SYNC_MAX_RETRIES: 0`
+   - 无需 GitHub 推送：`config.json` 中设 `GITHUB_SYNC_MAX_RETRIES: 0`  
+   - 无需 Cloudflare DNS 更新：`config.json` 中设 `CF_ENABLED: false`
 
 ---
 
@@ -240,6 +241,8 @@
 | `CF_DNS_RECORD_NAME` | `string` | `"your_CF_DNS_RECORD_NAME"` | 完整子域名 |
 | `CF_TTL` | `int` | `60` | DNS 记录 TTL（秒） |
 | `CF_PROXIED` | `boolean` | `false` | 是否启用 Cloudflare CDN 代理 |
+
+> 💡 若不需要 DNS 更新，将 `CF_ENABLED` 设为 `false` 即可。
 
 ### 节点数据源与输出
 
