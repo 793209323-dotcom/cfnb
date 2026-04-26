@@ -366,6 +366,7 @@ python3 main.py
 | `MAX_WORKERS` | `int` | `200` | TCP 并发测试最大线程数 |
 | `AVAILABILITY_WORKERS` | `int` | `10` | 可用性检测并发数 |
 | `BANDWIDTH_WORKERS` | `int` | `10` | 带宽测速并发数（建议不超过 10） |
+| `FALLBACK_WORKERS` | `int` | `10` | 备用国家查询的并发线程数（当标签无法识别时自动调用可用性API查询国家） |
 
 **重试策略配置**
 
@@ -638,7 +639,7 @@ git branch -M $(git remote show origin | grep "HEAD branch" | cut -d " " -f5) 2>
 > 各阶段对应域名见上方“涉及域名”列表。
 
 **涉及域名：**  
-`cm.edu.kg` · `cmliussss.net` · `090227.xyz` · `cloudflare.com` · `zjiecode.com` · `github.com` · `githubusercontent.com`
+`cm.edu.kg` · `cmliussss.net` · `090227.xyz` · `cloudflare.com` · `zjiecode.com` · `pages.dev` · `github.com` · `githubusercontent.com`
 
 **建议：**  
 1. 检查本机能否直连上述域名 → 能通设 `DIRECT`，不通设 `PROXY`  

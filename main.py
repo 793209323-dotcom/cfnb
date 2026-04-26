@@ -21,9 +21,81 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==================== 预编译正则 ====================
-NODE_LINE_PATTERN = re.compile(r"^\d+\.\d+\.\d+\.\d+:\d+#[A-Z]{2}$")
 NODE_PATTERN = re.compile(r"^(\d+\.\d+\.\d+\.\d+):(\d+)#(.+)$")
 IP_PORT_PATTERN = re.compile(r"^(\d+\.\d+\.\d+\.\d+):(\d+)#")
+
+# ==================== 国家代码映射表（全球覆盖）====================
+CN_TO_CODE = {
+    "阿富汗": "AF", "奥兰群岛": "AX", "阿尔巴尼亚": "AL", "阿尔及利亚": "DZ",
+    "美属萨摩亚": "AS", "安道尔": "AD", "安哥拉": "AO", "安圭拉": "AI",
+    "南极洲": "AQ", "安提瓜和巴布达": "AG", "阿根廷": "AR", "亚美尼亚": "AM",
+    "阿鲁巴": "AW", "澳大利亚": "AU", "奥地利": "AT", "阿塞拜疆": "AZ",
+    "巴哈马": "BS", "巴林": "BH", "孟加拉国": "BD", "孟加拉": "BD",
+    "巴巴多斯": "BB", "白俄罗斯": "BY", "比利时": "BE", "伯利兹": "BZ",
+    "贝宁": "BJ", "百慕大": "BM", "不丹": "BT", "玻利维亚": "BO",
+    "波黑": "BA", "波斯尼亚和黑塞哥维那": "BA", "博茨瓦纳": "BW",
+    "布维岛": "BV", "巴西": "BR", "英属印度洋领地": "IO",
+    "文莱": "BN", "保加利亚": "BG", "布基纳法索": "BF", "布隆迪": "BI",
+    "柬埔寨": "KH", "喀麦隆": "CM", "加拿大": "CA", "佛得角": "CV",
+    "开曼群岛": "KY", "中非": "CF", "乍得": "TD", "智利": "CL",
+    "中国": "CN", "圣诞岛": "CX", "科科斯(基林)群岛": "CC",
+    "哥伦比亚": "CO", "科摩罗": "KM", "刚果(布)": "CG", "刚果（布）": "CG",
+    "刚果(金)": "CD", "刚果（金）": "CD", "库克群岛": "CK",
+    "哥斯达黎加": "CR", "科特迪瓦": "CI", "克罗地亚": "HR", "古巴": "CU",
+    "塞浦路斯": "CY", "捷克": "CZ", "丹麦": "DK", "吉布提": "DJ",
+    "多米尼克": "DM", "多米尼加": "DO", "厄瓜多尔": "EC", "埃及": "EG",
+    "萨尔瓦多": "SV", "赤道几内亚": "GQ", "厄立特里亚": "ER",
+    "爱沙尼亚": "EE", "埃塞俄比亚": "ET", "福克兰群岛(马尔维纳斯)": "FK",
+    "法罗群岛": "FO", "斐济": "FJ", "芬兰": "FI", "法国": "FR",
+    "法属圭亚那": "GF", "法属波利尼西亚": "PF", "法属南部领地": "TF",
+    "加蓬": "GA", "冈比亚": "GM", "格鲁吉亚": "GE", "德国": "DE",
+    "加纳": "GH", "直布罗陀": "GI", "希腊": "GR", "格陵兰": "GL",
+    "格林纳达": "GD", "瓜德罗普": "GP", "关岛": "GU", "危地马拉": "GT",
+    "根西岛": "GG", "几内亚": "GN", "几内亚比绍": "GW", "圭亚那": "GY",
+    "海地": "HT", "赫德岛和麦克唐纳群岛": "HM", "梵蒂冈": "VA",
+    "洪都拉斯": "HN", "香港": "HK", "匈牙利": "HU", "冰岛": "IS",
+    "印度": "IN", "印度尼西亚": "ID", "伊朗": "IR", "伊拉克": "IQ",
+    "爱尔兰": "IE", "马恩岛": "IM", "以色列": "IL", "意大利": "IT",
+    "牙买加": "JM", "日本": "JP", "泽西岛": "JE", "约旦": "JO",
+    "哈萨克斯坦": "KZ", "肯尼亚": "KE", "基里巴斯": "KI", "朝鲜": "KP",
+    "韩国": "KR", "科威特": "KW", "吉尔吉斯斯坦": "KG", "老挝": "LA",
+    "拉脱维亚": "LV", "黎巴嫩": "LB", "莱索托": "LS", "利比里亚": "LR",
+    "利比亚": "LY", "列支敦士登": "LI", "立陶宛": "LT", "卢森堡": "LU",
+    "澳门": "MO", "北马其顿": "MK", "马其顿": "MK", "马达加斯加": "MG",
+    "马拉维": "MW", "马来西亚": "MY", "马尔代夫": "MV", "马里": "ML",
+    "马耳他": "MT", "马绍尔群岛": "MH", "马提尼克": "MQ",
+    "毛里塔尼亚": "MR", "毛里求斯": "MU", "马约特": "YT", "墨西哥": "MX",
+    "密克罗尼西亚": "FM", "摩尔多瓦": "MD", "摩纳哥": "MC", "蒙古": "MN",
+    "黑山": "ME", "蒙特塞拉特": "MS", "摩洛哥": "MA", "莫桑比克": "MZ",
+    "缅甸": "MM", "纳米比亚": "NA", "瑙鲁": "NR", "尼泊尔": "NP",
+    "荷兰": "NL", "新喀里多尼亚": "NC", "新西兰": "NZ", "尼加拉瓜": "NI",
+    "尼日尔": "NE", "尼日利亚": "NG", "纽埃": "NU", "诺福克岛": "NF",
+    "北马里亚纳群岛": "MP", "挪威": "NO", "阿曼": "OM", "巴基斯坦": "PK",
+    "帕劳": "PW", "巴勒斯坦": "PS", "巴拿马": "PA", "巴布亚新几内亚": "PG",
+    "巴拉圭": "PY", "秘鲁": "PE", "菲律宾": "PH", "皮特凯恩": "PN",
+    "波兰": "PL", "葡萄牙": "PT", "波多黎各": "PR", "卡塔尔": "QA",
+    "留尼汪": "RE", "罗马尼亚": "RO", "俄罗斯": "RU", "卢旺达": "RW",
+    "圣巴泰勒米": "BL", "圣赫勒拿": "SH", "圣基茨和尼维斯": "KN",
+    "圣卢西亚": "LC", "圣马丁": "MF", "圣皮埃尔和密克隆": "PM",
+    "圣文森特和格林纳丁斯": "VC", "萨摩亚": "WS", "圣马力诺": "SM",
+    "圣多美和普林西比": "ST", "沙特阿拉伯": "SA", "沙特": "SA",
+    "塞内加尔": "SN", "塞尔维亚": "RS", "塞舌尔": "SC", "塞拉利昂": "SL",
+    "新加坡": "SG", "圣马丁(荷兰)": "SX", "斯洛伐克": "SK",
+    "斯洛文尼亚": "SI", "所罗门群岛": "SB", "索马里": "SO", "南非": "ZA",
+    "南乔治亚和南桑威奇群岛": "GS", "南苏丹": "SS", "西班牙": "ES",
+    "斯里兰卡": "LK", "苏丹": "SD", "苏里南": "SR", "斯瓦尔巴和扬马延": "SJ",
+    "斯威士兰": "SZ", "瑞典": "SE", "瑞士": "CH", "叙利亚": "SY",
+    "台湾": "TW", "塔吉克斯坦": "TJ", "坦桑尼亚": "TZ", "泰国": "TH",
+    "东帝汶": "TL", "多哥": "TG", "托克劳": "TK", "汤加": "TO",
+    "特立尼达和多巴哥": "TT", "突尼斯": "TN", "土耳其": "TR",
+    "土库曼斯坦": "TM", "特克斯和凯科斯群岛": "TC", "图瓦卢": "TV",
+    "乌干达": "UG", "乌克兰": "UA", "阿联酋": "AE", "英国": "GB",
+    "美国": "US", "美国本土外小岛屿": "UM", "乌拉圭": "UY",
+    "乌兹别克斯坦": "UZ", "瓦努阿图": "VU", "委内瑞拉": "VE",
+    "越南": "VN", "英属维尔京群岛": "VG", "美属维尔京群岛": "VI",
+    "瓦利斯和富图纳": "WF", "西撒哈拉": "EH", "也门": "YE",
+    "赞比亚": "ZM", "津巴布韦": "ZW",
+}
 
 # ==================== 加载配置文件 ====================
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -67,7 +139,7 @@ def load_config():
         "CF_PROXIED": False,
         "CF_DNS_CONNECT_TIMEOUT": 3,
         "CF_DNS_READ_TIMEOUT": 3,
-        "JSON_URL": "https://zip.cm.edu.kg/all.txt",
+        "ADDITIONAL_SOURCES": [],
         "FETCH_MAX_RETRIES": 3,
         "FETCH_RETRY_DELAY": 3,
         "FETCH_TIMEOUT": 3,
@@ -96,6 +168,7 @@ def load_config():
         "BANDWIDTH_CONNECT_TIMEOUT": 3,
         "MAX_WORKERS": 200,
         "AVAILABILITY_WORKERS": 10,
+        "FALLBACK_WORKERS": 10,
         "BANDWIDTH_WORKERS": 10,
         "DNS_UPDATE_MAX_RETRIES": 3,
         "DNS_UPDATE_RETRY_DELAY": 3,
@@ -138,7 +211,7 @@ CF_TTL = cfg["CF_TTL"]
 CF_PROXIED = cfg["CF_PROXIED"]
 CF_DNS_CONNECT_TIMEOUT = cfg["CF_DNS_CONNECT_TIMEOUT"]
 CF_DNS_READ_TIMEOUT = cfg["CF_DNS_READ_TIMEOUT"]
-JSON_URL = cfg["JSON_URL"]
+# ADDITIONAL_SOURCES 不在顶层声明，在 main() 中直接使用 cfg.get("ADDITIONAL_SOURCES", [])
 FETCH_MAX_RETRIES = cfg["FETCH_MAX_RETRIES"]
 FETCH_RETRY_DELAY = cfg["FETCH_RETRY_DELAY"]
 FETCH_TIMEOUT = cfg["FETCH_TIMEOUT"]
@@ -163,6 +236,7 @@ BANDWIDTH_PROCESS_BUFFER = cfg["BANDWIDTH_PROCESS_BUFFER"]
 BANDWIDTH_CONNECT_TIMEOUT = cfg["BANDWIDTH_CONNECT_TIMEOUT"]
 MAX_WORKERS = cfg["MAX_WORKERS"]
 AVAILABILITY_WORKERS = cfg["AVAILABILITY_WORKERS"]
+FALLBACK_WORKERS = cfg["FALLBACK_WORKERS"]
 BANDWIDTH_WORKERS = cfg["BANDWIDTH_WORKERS"]
 DNS_UPDATE_MAX_RETRIES = cfg["DNS_UPDATE_MAX_RETRIES"]
 DNS_UPDATE_RETRY_DELAY = cfg["DNS_UPDATE_RETRY_DELAY"]
@@ -199,37 +273,191 @@ def send_wxpusher_notification(content, summary):
     except Exception as e:
         print(f"⚠️ 微信通知异常: {e}")
 
-def fetch_nodes():
+# ==================== 自适应多数据源解析引擎 ====================
+def extract_country_code(label):
+    """从任意标签中提取标准两位国家代码（支持纯代码、中文名、emoji国旗、混合无关文字）"""
+    label = label.strip()
+    if not label:
+        return None
+
+    tokens = re.split(r'[\s,;|/]+', label)
+
+    # 1. 优先找标准两位大写字母代码
+    for token in tokens:
+        token = token.strip()
+        if re.match(r'^[A-Z]{2}$', token):
+            return token
+
+    # 2. 对每个 token 尝试提取中文名
+    for token in tokens:
+        token_no_emoji = re.sub(r'[\U0001F1E6-\U0001F1FF]', '', token).strip()
+        cn_match = re.match(r'^([\u4e00-\u9fff（）()]+)\d*$', token_no_emoji)
+        if cn_match:
+            cn_name = cn_match.group(1).strip()
+            code = CN_TO_CODE.get(cn_name)
+            if code:
+                return code
+
+    # 3. 解码纯 emoji 国旗
+    emoji_chars = [c for c in label if '\U0001F1E6' <= c <= '\U0001F1FF']
+    if len(emoji_chars) >= 2 and len(emoji_chars) % 2 == 0:
+        first = ord(emoji_chars[0]) - 0x1F1E6
+        second = ord(emoji_chars[1]) - 0x1F1E6
+        if 0 <= first <= 25 and 0 <= second <= 25:
+            return chr(first + ord('A')) + chr(second + ord('A'))
+
+    return None
+
+
+def _parse_json_nodes(data):
+    """从 JSON 结构中递归提取节点"""
+    nodes = []
+    if isinstance(data, list):
+        for item in data:
+            nodes.extend(_parse_json_nodes(item))
+    elif isinstance(data, dict):
+        for key in ('nodes', 'data', 'result', 'list'):
+            if key in data and isinstance(data[key], list):
+                nodes.extend(_parse_json_nodes(data[key]))
+                break
+        ip = data.get('ip') or data.get('host')
+        port = data.get('port')
+        code = data.get('country') or data.get('cc')
+        if ip and port and code:
+            nodes.append(f"{ip}:{port}#{code.upper()}")
+    elif isinstance(data, str):
+        nodes.extend(_parse_text_nodes(data))
+    return nodes
+
+
+def _query_country(ip, port):
+    """通过已有的可用性检测 API 查询 IP 的国家代码"""
+    api_url = cfg.get("AVAILABILITY_CHECK_API", "https://api.check.proxyip.cmliussss.net/check")
+    try:
+        resp = requests.get(
+            api_url,
+            params={"proxyip": f"{ip}:{port}"},
+            timeout=(AVAILABILITY_CONNECT_TIMEOUT, AVAILABILITY_TIMEOUT)
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            country = data.get("probe_results", {}).get("ipv4", {}).get("exit", {}).get("country", "")
+            if country and len(country) == 2:
+                return country.upper()
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_countries_batch(ipports):
+    """并发查询一批 IP 的国家代码"""
+    results = {}
+    total = len(ipports)
+    completed = 0
+    last_print = time.time()
+
+    def worker(ipport):
+        ip, port = ipport.rsplit(':', 1)
+        return ipport, _query_country(ip, port)
+
+    with ThreadPoolExecutor(max_workers=FALLBACK_WORKERS) as executor:
+        futures = {executor.submit(worker, ipp): ipp for ipp in ipports}
+        for future in as_completed(futures):
+            try:
+                ipport, code = future.result()
+                results[ipport] = code
+            except Exception:
+                results[futures[future]] = None
+            completed += 1
+            now = time.time()
+            if now - last_print >= PROGRESS_PRINT_INTERVAL or completed == total:
+                print(f"\r    [备用API查询] 进度：{completed}/{total} ({(completed/total)*100:.1f}%)", end="", flush=True)
+                last_print = now
+
+    if total > 0:
+        print()
+    return results
+
+
+def _parse_text_nodes(text):
+    """从纯文本中提取标准节点（内置备用 API 查询）"""
+    nodes = []
+    pending = []
+
+    tokens = text.split()
+    for token in tokens:
+        if '#' not in token:
+            continue
+        try:
+            ipport, label = token.split('#', 1)
+        except ValueError:
+            continue
+        ipport = ipport.strip()
+        label = label.strip()
+
+        if ipport.startswith('['):
+            continue
+        if not re.match(r'^\d+\.\d+\.\d+\.\d+:\d+$', ipport):
+            continue
+
+        code = extract_country_code(label)
+        if code:
+            nodes.append(f"{ipport}#{code}")
+        else:
+            pending.append(ipport)
+
+    if pending:
+        print(f"    {len(pending)} 个标签未能识别，通过可用性检测 API 查询国家...")
+        resolved = _resolve_countries_batch(pending)
+        for ipport, code in resolved.items():
+            if code:
+                nodes.append(f"{ipport}#{code}")
+
+    return nodes
+
+
+def parse_adaptive(text):
+    """自适应解析任意格式的节点列表文本（JSON、纯文本等）"""
+    text = text.strip()
+    if not text:
+        return []
+
+    if text.startswith('{') or text.startswith('['):
+        try:
+            data = json.loads(text)
+            return _parse_json_nodes(data)
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    return _parse_text_nodes(text)
+
+
+def fetch_additional_source(url):
+    """拉取单个数据源并返回标准节点列表"""
+    if not url:
+        return []
+
     max_retries = FETCH_MAX_RETRIES
     retry_delay = FETCH_RETRY_DELAY
 
     for attempt in range(1, max_retries + 1):
         try:
-            print(f"正在请求 {JSON_URL} (尝试 {attempt}/{max_retries}) ...")
-            resp = requests.get(JSON_URL, timeout=(FETCH_CONNECT_TIMEOUT, FETCH_TIMEOUT))
+            print(f"正在请求数据源 {url} (尝试 {attempt}/{max_retries}) ...")
+            resp = requests.get(url, timeout=(FETCH_CONNECT_TIMEOUT, FETCH_TIMEOUT))
             resp.raise_for_status()
-            lines = [line.strip() for line in resp.text.splitlines() if line.strip() and not line.startswith('#')]
-            nodes = []
-            for line in lines:
-                if NODE_LINE_PATTERN.match(line):
-                    nodes.append(line)
-                else:
-                    print(f"警告：跳过格式不正确的行：{line}")
-            print(f"成功解析 {len(nodes)} 个节点。")
+            nodes = parse_adaptive(resp.text)
+            print(f"从 {url} 解析出 {len(nodes)} 个节点。")
             return nodes
-
         except Exception as e:
-            print(f"请求或解析失败: {e}")
+            print(f"请求或解析失败 ({url}): {e}")
             if attempt < max_retries:
                 print(f"等待 {retry_delay} 秒后重试...")
                 time.sleep(retry_delay)
             else:
-                print(f"已尝试 {max_retries} 次，获取节点失败，退出。")
-                send_wxpusher_notification(
-                    content=f"获取 Cloudflare IP 列表失败，已重试 {max_retries} 次。错误：{e}",
-                    summary="获取 Cloudflare IP 列表失败"
-                )
-                sys.exit(1)
+                print(f"已尝试 {max_retries} 次，放弃该数据源。")
+                return []
+
+# =========================== 原有测试、测速、DNS、GitHub 等函数保持不变 ===========================
 
 def test_tcp_latency(ip, port, timeout=TIMEOUT, probes=TCP_PROBES):
     min_latency = float("inf")
@@ -629,7 +857,27 @@ def main():
     if FILTER_COUNTRIES_ENABLED:
         print(f"国家过滤：启用，允许国家：{', '.join(ALLOWED_COUNTRIES)}")
 
-    nodes = fetch_nodes()
+    # 统一从 ADDITIONAL_SOURCES 加载所有数据源
+    nodes = []
+    additional_sources = cfg.get("ADDITIONAL_SOURCES", [])
+    for source in additional_sources:
+        if not source.get("enabled", True):
+            continue
+        url = source.get("url")
+        if not url:
+            continue
+        v2_nodes = fetch_additional_source(url)
+        if v2_nodes:
+            seen = set()
+            for n in nodes:
+                seen.add(n.split('#')[0])
+            for n in v2_nodes:
+                key = n.split('#')[0]
+                if key not in seen:
+                    seen.add(key)
+                    nodes.append(n)
+    print(f"合并后总计 {len(nodes)} 个节点。")
+
     if not nodes:
         print("没有获取到任何有效节点，退出。")
         sys.exit(1)

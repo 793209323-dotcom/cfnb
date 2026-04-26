@@ -156,6 +156,9 @@
     "AVAILABILITY_WORKERS": 10,
     "_comment_AVAILABILITY_WORKERS": "可用性检测的并发线程数",
 
+    "FALLBACK_WORKERS": 10,
+    "_comment_FALLBACK_WORKERS": "备用国家查询的并发线程数（当标签无法识别时自动调用可用性 API 查询）",
+
     "BANDWIDTH_WORKERS": 10,
     "_comment_BANDWIDTH_WORKERS": "带宽测速的并发线程数",
 
