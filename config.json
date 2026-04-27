@@ -70,11 +70,15 @@
             "enabled": true
         },
         {
+            "url": "https://ip-31c.pages.dev/sub",
+            "enabled": true
+        },
+        {
             "url": "https://ip-31c.pages.dev/proxy",
             "enabled": true
         },
         {
-            "url": "https://raw.githubusercontent.com/xinyitang3/extract_ips/refs/heads/main/wtf.txt",
+            "url": "https://raw.githubusercontent.com/xinyitang3/extract_ips/refs/heads/master/wtf.txt",
             "enabled": true
         }
     ],
