@@ -20,6 +20,7 @@ import asyncio
 import aiohttp
 import ipaddress
 import warnings
+import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 # from urllib3.exceptions import InsecureRequestWarning
@@ -56,6 +57,16 @@ requests.get = new_get
 requests.post = new_post
 requests.head = new_head
 # ===========================================
+
+# ===== 线程级 Session（复用 TCP/TLS 连接，降低握手开销）=====
+_thread_local = threading.local()
+
+def _get_session():
+    """每个线程一个 Session，避免线程安全问题，复用同主机的连接"""
+    if not hasattr(_thread_local, "session"):
+        _thread_local.session = requests.Session()
+    return _thread_local.session
+# ==========================================================
 
 # ==================== 预编译正则 ====================
 NODE_PATTERN = re.compile(r"^(\d+\.\d+\.\d+\.\d+):(\d+)#(.+)$")
@@ -531,8 +542,9 @@ RISK_LEVEL_ORDER = {
 def get_ip_risk_level(ip):
     """查询单个 IP 的风险等级字符串，失败返回 '未知'"""
     url = f"https://api.ipapi.is/?q={ip}"
+    sess = _get_session()
     try:
-        resp = requests.get(url, timeout=10)
+        resp = sess.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
     except Exception:
@@ -642,8 +654,9 @@ def _parse_json_nodes(data):
 
 
 def _query_country(ip, port):
+    sess = _get_session()
     try:
-        resp = requests.get(
+        resp = sess.get(
             AVAILABILITY_CHECK_API,
             params={"proxyip": f"{ip}:{port}"},
             timeout=(AVAILABILITY_CONNECT_TIMEOUT, AVAILABILITY_TIMEOUT)
@@ -751,7 +764,8 @@ def fetch_additional_source(url):
         try:
             print(f"正在请求数据源 {url} (尝试 {attempt}/{FETCH_MAX_RETRIES}) ...")
             headers = {"Accept-Encoding": "gzip, deflate, br, zstd"}
-            resp = requests.get(url, timeout=(FETCH_CONNECT_TIMEOUT, FETCH_TIMEOUT), headers=headers)
+            sess = _get_session()
+            resp = sess.get(url, timeout=(FETCH_CONNECT_TIMEOUT, FETCH_TIMEOUT), headers=headers)
             resp.raise_for_status()
             nodes = parse_adaptive(resp.text)
             print(f"从 {url} 解析出 {len(nodes)} 个节点。")
@@ -772,18 +786,23 @@ class IpInfoAsync:
         self.n_tokens = len(token_list)
         self.current_token_index = 0
         self.token_lock = asyncio.Lock()
+        self.concurrency = concurrency
         self.semaphore = asyncio.Semaphore(concurrency)
         self.min_interval = min_interval
         self.session = None
         self.trust_env = trust_env
-        self.failure_threshold = max(2, failure_threshold)   # 强制 ≥2
+        self.failure_threshold = max(2, failure_threshold)
         self.token_failures = [0] * self.n_tokens
         self.cooldown_until = [0.0] * self.n_tokens
         self.last_request_time = [0.0] * self.n_tokens
         self.rate_locks = [asyncio.Lock() for _ in range(self.n_tokens)]
 
     async def __aenter__(self):
-        self.session = aiohttp.ClientSession(trust_env=self.trust_env)
+        connector = aiohttp.TCPConnector(
+            limit=self.concurrency,
+            limit_per_host=self.concurrency,
+        )
+        self.session = aiohttp.ClientSession(trust_env=self.trust_env, connector=connector)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -908,7 +927,11 @@ def sort_cache_file(cache_file):
 async def validate_tokens(token_list, concurrency, min_interval, trust_env):
     valid = []
     sem = asyncio.Semaphore(concurrency)
-    async with aiohttp.ClientSession(trust_env=trust_env) as session:
+    connector = aiohttp.TCPConnector(
+        limit=concurrency,
+        limit_per_host=concurrency,
+    )
+    async with aiohttp.ClientSession(trust_env=trust_env, connector=connector) as session:
         async def check(token):
             url = f"https://ipinfo.io/json?token={token}"
             try:
@@ -1108,9 +1131,10 @@ def check_availability(node_str):
     max_attempts = AVAILABILITY_INNER_RETRY_MAX + 1 if AVAILABILITY_INNER_RETRY_ENABLED else 1
     retry_delay = AVAILABILITY_INNER_RETRY_DELAY if AVAILABILITY_INNER_RETRY_ENABLED else 0
 
+    sess = _get_session()
     for attempt in range(max_attempts):
         try:
-            resp = requests.get(
+            resp = sess.get(
                 AVAILABILITY_CHECK_API,
                 params={"proxyip": proxyip},
                 timeout=(AVAILABILITY_CONNECT_TIMEOUT, AVAILABILITY_TIMEOUT)
