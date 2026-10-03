@@ -7,7 +7,7 @@ Cloudflare IP 优选工具 (TCP筛选 + IP可用性二次筛选 + HTTP检测 + c
 支持 Windows / Linux
 """
 
-import requests
+from curl_cffi import requests
 import socket
 import time
 import sys
@@ -19,21 +19,26 @@ import json
 import asyncio
 import aiohttp
 import ipaddress
+import warnings
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib3.exceptions import InsecureRequestWarning
+# from urllib3.exceptions import InsecureRequestWarning
 
 # 修复 Windows 下 ProactorEventLoop 残留任务报警
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # 禁用 SSL 警告 (用于 HTTP 检测)
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+# requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+# 屏蔽所有警告
+warnings.filterwarnings("ignore")
 
 # ===== 全局禁用 SSL 验证（解决证书问题）=====
 import functools
 original_get = requests.get
 original_post = requests.post
+original_head = requests.head
 
 def new_get(url, *args, **kwargs):
     kwargs.setdefault('verify', False)
@@ -43,8 +48,13 @@ def new_post(url, *args, **kwargs):
     kwargs.setdefault('verify', False)
     return original_post(url, *args, **kwargs)
 
+def new_head(url, *args, **kwargs):
+    kwargs.setdefault('verify', False)
+    return original_head(url, *args, **kwargs)
+
 requests.get = new_get
 requests.post = new_post
+requests.head = new_head
 # ===========================================
 
 # ==================== 预编译正则 ====================

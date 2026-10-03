@@ -1,4 +1,4 @@
-﻿# setup.ps1 - Cloudflare IP 优选工具一键部署脚本（防闪退版）
+﻿# setup.ps1 - Cloudflare IP 优选工具一键部署脚本
 # 
 # 用法：直接双击运行，或右键“使用 PowerShell 运行”即可，脚本会自动请求管理员权限。
 
@@ -79,6 +79,23 @@ function Refresh-EnvPath {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 }
 
+# ---------- 辅助函数：用 Python import 检测包是否已安装 ----------
+# 避免 pip show / import 的 stderr 输出被 $ErrorActionPreference = "Stop" 当成致命错误
+function Test-PyPackage {
+    param(
+        [string]$PythonExe,
+        [string]$Module
+    )
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    try {
+        $null = & $PythonExe -c "import $Module" 2>&1
+        return ($LASTEXITCODE -eq 0)
+    } finally {
+        $ErrorActionPreference = $oldEAP
+    }
+}
+
 # ---------- 计算下一个整点5分钟时间（用于首次触发）----------
 function Get-NextAlignedTime {
     param([int]$IntervalMinutes = 5)
@@ -148,50 +165,71 @@ if ($curlCmd) {
     Write-Host "✅ curl 安装完成。" -ForegroundColor Green
 }
 
-# ---------- 4. 安装所有 Python 依赖（requests, aiohttp, brotlicffi）----------
+# ---------- 4. 安装所有 Python 依赖（curl_cffi, requests, aiohttp, brotlicffi）----------
 Write-Host "[4/4] 检查并安装 Python 依赖..." -ForegroundColor Green
 
 # 先升级 pip，确保安装过程顺畅
 Write-Host "  升级 pip..." -ForegroundColor Gray
 & $PythonExePath -m pip install --upgrade pip --quiet
 
+# 检查并安装 curl_cffi（用于模拟浏览器 TLS 指纹，解决代理握手失败）
+if (Test-PyPackage -PythonExe $PythonExePath -Module "curl_cffi") {
+    Write-Host "  ✅ curl_cffi 已安装" -ForegroundColor Gray
+} else {
+    Write-Host "  安装 curl_cffi..." -ForegroundColor Yellow
+    & $PythonExePath -m pip install curl_cffi --quiet
+    if (Test-PyPackage -PythonExe $PythonExePath -Module "curl_cffi") {
+        Write-Host "  ✅ curl_cffi 安装完成" -ForegroundColor Green
+    } else {
+        Write-Host "  ❌ curl_cffi 安装失败，请手动执行: pip install curl_cffi" -ForegroundColor Red
+    }
+}
+
 # 检查并安装 requests
-$reqInstalled = & $PythonExePath -m pip show requests 2>$null
-if (-not $reqInstalled) {
+if (Test-PyPackage -PythonExe $PythonExePath -Module "requests") {
+    Write-Host "  ✅ requests 已安装" -ForegroundColor Gray
+} else {
     Write-Host "  安装 requests..." -ForegroundColor Yellow
     & $PythonExePath -m pip install requests --quiet
-    Write-Host "  ✅ requests 安装完成" -ForegroundColor Green
-} else {
-    Write-Host "  ✅ requests 已安装" -ForegroundColor Gray
+    if (Test-PyPackage -PythonExe $PythonExePath -Module "requests") {
+        Write-Host "  ✅ requests 安装完成" -ForegroundColor Green
+    } else {
+        Write-Host "  ❌ requests 安装失败，请手动执行: pip install requests" -ForegroundColor Red
+    }
 }
 
 # 检查并安装 aiohttp
-$aioInstalled = & $PythonExePath -m pip show aiohttp 2>$null
-if (-not $aioInstalled) {
+if (Test-PyPackage -PythonExe $PythonExePath -Module "aiohttp") {
+    Write-Host "  ✅ aiohttp 已安装" -ForegroundColor Gray
+} else {
     Write-Host "  安装 aiohttp..." -ForegroundColor Yellow
     & $PythonExePath -m pip install aiohttp --quiet
-    Write-Host "  ✅ aiohttp 安装完成" -ForegroundColor Green
-} else {
-    Write-Host "  ✅ aiohttp 已安装" -ForegroundColor Gray
+    if (Test-PyPackage -PythonExe $PythonExePath -Module "aiohttp") {
+        Write-Host "  ✅ aiohttp 安装完成" -ForegroundColor Green
+    } else {
+        Write-Host "  ❌ aiohttp 安装失败，请手动执行: pip install aiohttp" -ForegroundColor Red
+    }
 }
 
 # 检查并安装 brotli 解压支持（优先 brotlicffi，纯 Python 实现，兼容性更好）
-$brotliInstalled = & $PythonExePath -m pip show brotlicffi 2>$null
-if (-not $brotliInstalled) {
-    $brotliInstalled = & $PythonExePath -m pip show brotli 2>$null
-}
-if (-not $brotliInstalled) {
+if (Test-PyPackage -PythonExe $PythonExePath -Module "brotlicffi") {
+    Write-Host "  ✅ brotlicffi 已安装" -ForegroundColor Gray
+} elseif (Test-PyPackage -PythonExe $PythonExePath -Module "brotli") {
+    Write-Host "  ✅ brotli 已安装" -ForegroundColor Gray
+} else {
     Write-Host "  安装 brotlicffi（解压支持）..." -ForegroundColor Yellow
-    try {
-        & $PythonExePath -m pip install brotlicffi --quiet
+    & $PythonExePath -m pip install brotlicffi --quiet
+    if (Test-PyPackage -PythonExe $PythonExePath -Module "brotlicffi") {
         Write-Host "  ✅ brotlicffi 安装完成" -ForegroundColor Green
-    } catch {
+    } else {
         Write-Host "  ⚠️ brotlicffi 安装失败，尝试安装 brotli..." -ForegroundColor Yellow
         & $PythonExePath -m pip install brotli --quiet
-        Write-Host "  ✅ brotli 安装完成" -ForegroundColor Green
+        if (Test-PyPackage -PythonExe $PythonExePath -Module "brotli") {
+            Write-Host "  ✅ brotli 安装完成" -ForegroundColor Green
+        } else {
+            Write-Host "  ❌ brotli 解压库安装失败，请手动执行: pip install brotlicffi" -ForegroundColor Red
+        }
     }
-} else {
-    Write-Host "  ✅ brotli 解压库已安装" -ForegroundColor Gray
 }
 Write-Host ""
 
@@ -226,7 +264,7 @@ try {
     try { $rootFolder.DeleteTask($TaskName, 0) } catch { }
 
     $taskDefinition = $taskService.NewTask(0)
-    $taskDefinition.RegistrationInfo.Description = "每$TaskIntervalMinutes分钟运行一次 Cloudflare IP 优选工具（永久重复）"
+    $taskDefinition.RegistrationInfo.Description = "每$($TaskIntervalMinutes)分钟运行一次 Cloudflare IP 优选工具（永久重复）"
 
     $taskDefinition.Principal.LogonType = 5
     $taskDefinition.Principal.RunLevel = 1

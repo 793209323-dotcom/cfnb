@@ -82,7 +82,7 @@
   - **Python 3.7+**
   - **Git**
   - **curl**（需在系统 PATH 中可用）
-- **Python 依赖**：`requests`, `aiohttp`, `brotlicffi`
+- **Python 依赖**：`curl_cffi`, `requests`, `aiohttp`, `brotlicffi`
 
 ---
 
@@ -101,7 +101,7 @@
 2. **配置各项令牌（见下一节）**  
    根据需求获取并填写 GitHub Token、Cloudflare API Token 和 WxPusher 凭证。
 
-> 💡 部署脚本会自动安装 `requests`、`aiohttp`、`brotlicffi` 三个 Python 依赖、创建 `.gitignore` 并配置定时任务（每 5 分钟整点运行）。
+> 💡 部署脚本会自动安装 `curl_cffi`、`requests`、`aiohttp`、`brotlicffi` 四个 Python 依赖、创建 `.gitignore` 并配置定时任务（每 5 分钟整点运行）。
 
 ---
 
@@ -176,7 +176,7 @@ python3 main.py
 2. 安装 [Git](https://git-scm.com/download/win) 和 [curl](https://curl.se/windows/)（curl 需加入 PATH）。
 3. 在项目目录打开命令提示符，安装依赖：
    ```cmd
-   pip install requests aiohttp brotlicffi
+   pip install curl_cffi requests aiohttp brotlicffi
    ```
 4. （可选）手动创建计划任务：
    - 按 `Win + R`，输入 `taskschd.msc` 打开任务计划程序。
@@ -195,7 +195,7 @@ python3 main.py
    ```
 2. 安装 Python 依赖：
    ```bash
-   pip3 install requests aiohttp brotlicffi
+   pip3 install curl_cffi requests aiohttp brotlicffi
    ```
 3. 赋予推送脚本执行权限（如果需要）：
    ```bash
@@ -759,9 +759,9 @@ git branch -M $(git remote show origin | grep "HEAD branch" | cut -d " " -f5) 2>
 | 测试阶段 | 是否走代理 | 说明 |
 | :--- | :--- | :--- |
 | TCP 延迟测试 (Socket) | ❌ 直连 | 反映本机到节点的 RTT |
-| HTTP 检测 (requests) | ❌ 直连 | 过滤非Cloudflare节点 |
+| HTTP 检测 (curl_cffi) | ❌ 直连 | 过滤非Cloudflare节点 |
 | 带宽测速 (curl) | ❌ 直连 | 反映本机到 CDN 的速度 |
-| API 请求类 (requests) | ✅ 跟随系统代理 | 获取节点、可用性、微信通知等 |
+| API 请求类 (curl_cffi) | ✅ 跟随系统代理 | 获取节点、可用性、微信通知等 |
 | Git 推送 (git) | ✅ 跟随系统代理 | 涉及 `github.com` 等 |
 
 > 各阶段对应域名见上方“涉及域名”列表。
@@ -779,8 +779,8 @@ git branch -M $(git remote show origin | grep "HEAD branch" | cut -d " " -f5) 2>
 <details>
 <summary>🔌 依赖与安装</summary>
 
-1. **提示 `ModuleNotFoundError: No module named 'requests'`**  
-   请执行 `pip install requests aiohttp brotlicffi` (Windows) 或 `pip3 install requests aiohttp brotlicffi` (Linux)。
+1. **提示 `ModuleNotFoundError: No module named 'curl_cffi'` 或 `requests`**  
+   请执行 `pip install curl_cffi requests aiohttp brotlicffi` (Windows) 或 `pip3 install curl_cffi requests aiohttp brotlicffi` (Linux)。
 
 2. **带宽测速被跳过**  
    请确保系统已安装 `curl` 且位于 PATH 环境变量中。
